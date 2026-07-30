@@ -11,6 +11,12 @@
  * Refer to the COPYING file of the official project for license.
  *****************************************************************************/
 
+/// Marker view used as the `viewToPresent` for the "Load External Subtitle File" cell.
+/// It is never actually presented; `MediaPlayerActionSheet`'s selection handler intercepts
+/// it and triggers `mediaMoreOptionsActionSheetDidRequestLoadSubtitleFile()` instead of
+/// pushing a child view, the same way it special-cases `EqualizerView`/`ABRepeatView`.
+final class LoadSubtitleFileMarkerView: UIView {}
+
 @objc(VLCMediaMoreOptionsActionSheetDelegate)
 protocol MediaMoreOptionsActionSheetDelegate {
     func mediaMoreOptionsActionSheetDidToggleInterfaceLock(state: Bool)
@@ -34,6 +40,7 @@ protocol MediaMoreOptionsActionSheetDelegate {
     func mediaMoreOptionsActionSheetPresentABRepeatView(with abView: ABRepeatView)
     func mediaMoreOptionsActionSheetDidSelectAMark()
     func mediaMoreOptionsActionSheetDidSelectBMark()
+    func mediaMoreOptionsActionSheetDidRequestLoadSubtitleFile()
     @objc optional func mediaMoreOptionsActionSheetShowPlaybackSpeedShortcut(_ displayView: Bool)
 }
 
@@ -146,6 +153,8 @@ protocol MediaMoreOptionsActionSheetDelegate {
         abRepeatView.delegate = self
         return abRepeatView
     }()
+
+    private lazy var loadSubtitleFileMarkerView = LoadSubtitleFileMarkerView(frame: offScreenFrame)
 
     // MARK: - Initializers
     override init() {
@@ -466,6 +475,8 @@ extension MediaMoreOptionsActionSheet: MediaPlayerActionSheetDataSource {
             return bookmarksView
         case .abRepeat:
             return abRepeatView
+        case .loadSubtitles:
+            return loadSubtitleFileMarkerView
         default:
             return mockView
         }
@@ -488,6 +499,13 @@ extension MediaMoreOptionsActionSheet: MediaPlayerActionSheetDataSource {
 
             if $0 == .filter && isAudioPlayer {
                 // Do not show the video filters category when the audio player is shown.
+                return
+            }
+
+            if $0 == .loadSubtitles && !isAudioPlayer {
+                // The video player already offers this via the subtitle track selector's
+                // "Load External" button; only surface it here for the audio player, which
+                // has no track selector of its own.
                 return
             }
 

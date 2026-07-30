@@ -1545,6 +1545,11 @@ extension PlayerViewController: MediaMoreOptionsActionSheetDelegate {
         let to = max(aMark.getPosition(), bMark.getPosition())
         playbackService.setABLoopFromPosition(Double(from), toPosition: Double(to))
     }
+
+    // Only the audio player surfaces this cell in the more-options action sheet
+    // (the video player already has its own subtitle track selector for this).
+    @objc func mediaMoreOptionsActionSheetDidRequestLoadSubtitleFile() {
+    }
 }
 
 // MARK: - OptionsNavigationBarDelegate
