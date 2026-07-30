@@ -24,6 +24,7 @@ enum ActionSheetCellIdentifier: String, CustomStringConvertible, CaseIterable {
     case interfaceLock
     case playNextItem
     case playlistPlayNextItem
+    case loadSubtitles
 
     var description: String {
         switch self {
@@ -51,6 +52,8 @@ enum ActionSheetCellIdentifier: String, CustomStringConvertible, CaseIterable {
             return NSLocalizedString("SETTINGS_PLAY_ALL", comment: "")
         case .playlistPlayNextItem:
             return NSLocalizedString("SETTINGS_PLAYLIST_PLAY_ALL", comment: "")
+        case .loadSubtitles:
+            return NSLocalizedString("LOAD_EXTERNAL", comment: "")
         }
     }
 
@@ -284,6 +287,9 @@ class MediaPlayerActionSheet: ActionSheet {
                 } else if let abRepeatView = item as? ABRepeatView {
                     self.removeActionSheet()
                     actionSheet.moreOptionsDelegate?.mediaMoreOptionsActionSheetPresentABRepeatView(with: abRepeatView)
+                } else if item is LoadSubtitleFileMarkerView {
+                    self.removeActionSheet()
+                    actionSheet.moreOptionsDelegate?.mediaMoreOptionsActionSheetDidRequestLoadSubtitleFile()
                 } else if let playbackSpeedView = item as? PlaybackSpeedView {
                     playbackSpeedView.setupSliderAndButtons()
                     self.add(childView: playbackSpeedView)

@@ -1585,6 +1585,13 @@ extension VideoPlayerViewController {
             abRepeatView.bottomAnchor.constraint(equalTo: mediaScrubProgressBar.topAnchor, constant: -20.0),
         ])
     }
+
+    override func mediaMoreOptionsActionSheetDidRequestLoadSubtitleFile() {
+        externalTrackRequestIsAudio = false
+        let picker = UIDocumentPickerViewController(documentTypes: ["public.item"], in: .open)
+        picker.delegate = self
+        present(picker, animated: true)
+    }
 }
 
 // MARK: - Download More SPU

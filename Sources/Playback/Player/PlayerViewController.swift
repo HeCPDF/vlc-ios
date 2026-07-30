@@ -13,6 +13,13 @@ import UIKit
 import AVFoundation
 import MediaPlayer
 
+extension Notification.Name {
+    // Posted by the iPadOS main menu's Subtitle > "Load External" command
+    // (VLCAppDelegate.buildMenu(with:)). Keep the raw string in sync with
+    // VLCMenuRequestAddSubtitleFileNotification in VLCAppDelegate.m.
+    static let VLCMenuRequestAddSubtitleFile = Notification.Name("VLCMenuRequestAddSubtitleFile")
+}
+
 fileprivate enum PlayerPanType {
     case none
 #if os(iOS)
@@ -824,6 +831,13 @@ class PlayerViewController: UIViewController {
 
         notificationCenter.addObserver(self, selector: #selector(updatePlayerControls), name: .VLCDidAppendMediaToQueue, object: nil)
         notificationCenter.addObserver(self, selector: #selector(updatePlayerControls), name: .VLCDidRemoveMediaFromQueue, object: nil)
+        notificationCenter.addObserver(self, selector: #selector(handleMenuRequestAddSubtitleFile), name: .VLCMenuRequestAddSubtitleFile, object: nil)
+    }
+
+    // Bridges the iPadOS main-menu "Subtitle > Add Subtitle File…" command to whichever
+    // player (audio or video) is currently on screen and alive to receive it.
+    @objc private func handleMenuRequestAddSubtitleFile() {
+        mediaMoreOptionsActionSheetDidRequestLoadSubtitleFile()
     }
 
     private func setupSeekDurations() {
@@ -1544,6 +1558,12 @@ extension PlayerViewController: MediaMoreOptionsActionSheetDelegate {
         let from = min(aMark.getPosition(), bMark.getPosition())
         let to = max(aMark.getPosition(), bMark.getPosition())
         playbackService.setABLoopFromPosition(Double(from), toPosition: Double(to))
+    }
+
+    // Overridden by AudioPlayerViewController (more-options action sheet cell) and
+    // VideoPlayerViewController (also reachable from the iPadOS main-menu "Subtitle"
+    // menu via handleMenuRequestAddSubtitleFile()).
+    @objc func mediaMoreOptionsActionSheetDidRequestLoadSubtitleFile() {
     }
 }
 

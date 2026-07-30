@@ -23,7 +23,14 @@
 #import "VLC-Swift.h"
 #import "VLCAppSceneDelegate.h"
 #import "VLCMLMedia+isWatched.h"
+#import "VLCPlaybackService.h"
 #import <WatchConnectivity/WatchConnectivity.h>
+
+// Keep in sync with Notification.Name.VLCMenuRequestAddSubtitleFile (PlayerViewController.swift).
+static NSString *const VLCMenuRequestAddSubtitleFileNotification = @"VLCMenuRequestAddSubtitleFile";
+
+static NSString *const VLCMainMenuIdentifierPlayback = @"org.videolan.vlc-ios.menu.playback";
+static NSString *const VLCMainMenuIdentifierSubtitle = @"org.videolan.vlc-ios.menu.subtitle";
 
 @interface VLCAppDelegate ()
 {
@@ -371,6 +378,183 @@
         // only recover a given media once
         [defaults setInteger:-1 forKey:kVLCLastPlayedMediaIdentifier];
     }
+}
+
+#pragma mark - iPadOS main menu
+
+// Ports a subset of the macOS VLC app's Playback/Subtitle menus to iPadOS as a real,
+// mouse/trackpad-clickable top menu bar (visible in Stage Manager windowed mode, and
+// via the Cmd-hold shortcuts overlay). Restricted to iPad: on iPhone this menu bar is
+// never shown to the user, so building it would be dead code that's easy to get wrong
+// without ever surfacing a bug.
+- (void)buildMenuWithBuilder:(id<UIMenuBuilder>)builder API_AVAILABLE(ios(13.0))
+{
+    [super buildMenuWithBuilder:builder];
+
+    if (builder.system != UIMenuSystem.mainSystem) {
+        return;
+    }
+    if (UIDevice.currentDevice.userInterfaceIdiom != UIUserInterfaceIdiomPad) {
+        return;
+    }
+
+    UICommand *playPause = [UIKeyCommand commandWithTitle:NSLocalizedString(@"PLAY_PAUSE_BUTTON", nil)
+                                                      image:nil
+                                                     action:@selector(vlc_menuPlayPause)
+                                                      input:@" "
+                                              modifierFlags:0
+                                               propertyList:nil];
+    UICommand *stop = [UIKeyCommand commandWithTitle:NSLocalizedString(@"MENU_STOP", nil)
+                                                image:nil
+                                               action:@selector(vlc_menuStop)
+                                                input:@"."
+                                        modifierFlags:UIKeyModifierCommand
+                                         propertyList:nil];
+    UICommand *next = [UIKeyCommand commandWithTitle:NSLocalizedString(@"MENU_NEXT", nil)
+                                                image:nil
+                                               action:@selector(vlc_menuNext)
+                                                input:UIKeyInputRightArrow
+                                        modifierFlags:UIKeyModifierCommand
+                                         propertyList:nil];
+    UICommand *previous = [UIKeyCommand commandWithTitle:NSLocalizedString(@"MENU_PREVIOUS", nil)
+                                                    image:nil
+                                                   action:@selector(vlc_menuPrevious)
+                                                    input:UIKeyInputLeftArrow
+                                            modifierFlags:UIKeyModifierCommand
+                                             propertyList:nil];
+    UICommand *jumpForward = [UIKeyCommand commandWithTitle:NSLocalizedString(@"MENU_JUMP_FORWARD", nil)
+                                                        image:nil
+                                                       action:@selector(vlc_menuJumpForward)
+                                                        input:UIKeyInputRightArrow
+                                                modifierFlags:UIKeyModifierAlternate
+                                                 propertyList:nil];
+    UICommand *jumpBackward = [UIKeyCommand commandWithTitle:NSLocalizedString(@"MENU_JUMP_BACKWARD", nil)
+                                                         image:nil
+                                                        action:@selector(vlc_menuJumpBackward)
+                                                         input:UIKeyInputLeftArrow
+                                                 modifierFlags:UIKeyModifierAlternate
+                                                  propertyList:nil];
+    UICommand *toggleRepeat = [UICommand commandWithTitle:NSLocalizedString(@"REPEAT_MODE", nil)
+                                                     image:nil
+                                                    action:@selector(vlc_menuToggleRepeat)
+                                              propertyList:nil];
+    UICommand *toggleShuffle = [UICommand commandWithTitle:NSLocalizedString(@"SHUFFLE", nil)
+                                                      image:nil
+                                                     action:@selector(vlc_menuToggleShuffle)
+                                               propertyList:nil];
+    UICommand *togglePiP = [UICommand commandWithTitle:NSLocalizedString(@"MENU_TOGGLE_PIP", nil)
+                                                  image:nil
+                                                 action:@selector(vlc_menuTogglePictureInPicture)
+                                           propertyList:nil];
+    UICommand *cycleAspectRatio = [UICommand commandWithTitle:NSLocalizedString(@"VIDEO_ASPECT_RATIO_BUTTON", nil)
+                                                         image:nil
+                                                        action:@selector(vlc_menuCycleAspectRatio)
+                                                  propertyList:nil];
+
+    UIMenu *playbackMenu = [UIMenu menuWithTitle:NSLocalizedString(@"MENU_PLAYBACK", nil)
+                                            image:nil
+                                       identifier:VLCMainMenuIdentifierPlayback
+                                          options:0
+                                         children:@[playPause, stop, previous, next,
+                                                    jumpBackward, jumpForward,
+                                                    toggleRepeat, toggleShuffle,
+                                                    togglePiP, cycleAspectRatio]];
+    [builder insertSiblingMenu:playbackMenu afterMenuForIdentifier:UIMenuFile];
+
+    UICommand *addSubtitleFile = [UICommand commandWithTitle:NSLocalizedString(@"LOAD_EXTERNAL", nil)
+                                                        image:nil
+                                                       action:@selector(vlc_menuAddSubtitleFile)
+                                                 propertyList:nil];
+    UICommand *increaseSubtitleDelay = [UIKeyCommand commandWithTitle:NSLocalizedString(@"INCREASE_SUBTITLES_DELAY", nil)
+                                                                 image:nil
+                                                                action:@selector(vlc_menuIncreaseSubtitleDelay)
+                                                                 input:@"="
+                                                         modifierFlags:UIKeyModifierCommand
+                                                          propertyList:nil];
+    UICommand *decreaseSubtitleDelay = [UIKeyCommand commandWithTitle:NSLocalizedString(@"DECREASE_SUBTITLES_DELAY", nil)
+                                                                 image:nil
+                                                                action:@selector(vlc_menuDecreaseSubtitleDelay)
+                                                                 input:@"-"
+                                                         modifierFlags:UIKeyModifierCommand
+                                                          propertyList:nil];
+
+    UIMenu *subtitleMenu = [UIMenu menuWithTitle:NSLocalizedString(@"SUBTITLES", nil)
+                                            image:nil
+                                       identifier:VLCMainMenuIdentifierSubtitle
+                                          options:0
+                                         children:@[addSubtitleFile, increaseSubtitleDelay, decreaseSubtitleDelay]];
+    [builder insertSiblingMenu:subtitleMenu afterMenuForIdentifier:VLCMainMenuIdentifierPlayback];
+}
+
+#pragma mark - iPadOS main menu actions
+
+- (void)vlc_menuPlayPause
+{
+    [[VLCPlaybackService sharedInstance] playPause];
+}
+
+- (void)vlc_menuStop
+{
+    [[VLCPlaybackService sharedInstance] stopPlayback];
+}
+
+- (void)vlc_menuNext
+{
+    [[VLCPlaybackService sharedInstance] next];
+}
+
+- (void)vlc_menuPrevious
+{
+    [[VLCPlaybackService sharedInstance] previous];
+}
+
+- (void)vlc_menuJumpForward
+{
+    [[VLCPlaybackService sharedInstance] jumpForward:10];
+}
+
+- (void)vlc_menuJumpBackward
+{
+    [[VLCPlaybackService sharedInstance] jumpBackward:10];
+}
+
+- (void)vlc_menuToggleRepeat
+{
+    [[VLCPlaybackService sharedInstance] toggleRepeatMode];
+}
+
+- (void)vlc_menuToggleShuffle
+{
+    VLCPlaybackService *service = [VLCPlaybackService sharedInstance];
+    service.shuffleMode = !service.shuffleMode;
+}
+
+- (void)vlc_menuTogglePictureInPicture
+{
+    [[VLCPlaybackService sharedInstance] togglePictureInPicture];
+}
+
+- (void)vlc_menuCycleAspectRatio
+{
+    [[VLCPlaybackService sharedInstance] switchAspectRatio:NO];
+}
+
+- (void)vlc_menuAddSubtitleFile
+{
+    [[NSNotificationCenter defaultCenter] postNotificationName:VLCMenuRequestAddSubtitleFileNotification
+                                                         object:nil];
+}
+
+- (void)vlc_menuIncreaseSubtitleDelay
+{
+    VLCPlaybackService *service = [VLCPlaybackService sharedInstance];
+    service.subtitleDelay = service.subtitleDelay + 50.f;
+}
+
+- (void)vlc_menuDecreaseSubtitleDelay
+{
+    VLCPlaybackService *service = [VLCPlaybackService sharedInstance];
+    service.subtitleDelay = service.subtitleDelay - 50.f;
 }
 
 @end

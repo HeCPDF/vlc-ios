@@ -621,6 +621,12 @@ extension AudioPlayerViewController {
         setPlayerInterfaceEnabled(!state)
     }
 
+    override func mediaMoreOptionsActionSheetDidRequestLoadSubtitleFile() {
+        let picker = UIDocumentPickerViewController(documentTypes: ["public.item"], in: .open)
+        picker.delegate = self
+        present(picker, animated: true)
+    }
+
     override func mediaMoreOptionsActionSheetDisplayAddBookmarksView(_ bookmarksView: AddBookmarksView) {
         super.mediaMoreOptionsActionSheetDisplayAddBookmarksView(bookmarksView)
 
@@ -679,6 +685,64 @@ extension AudioPlayerViewController {
 extension AudioPlayerViewController: ZoomTransitionEndpoint {
     var zoomTransitionArtworkView: UIImageView? {
         return audioPlayerView.thumbnailImageView
+    }
+}
+
+// MARK: - UIDocumentPickerDelegate
+
+extension AudioPlayerViewController: UIDocumentPickerDelegate {
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let mediaURL = playbackService.currentlyPlayingMedia?.url,
+              let fileURL = urls.first else {
+            return
+        }
+
+        let mediaURLPath = mediaURL.path
+        let filename = mediaURL.lastPathComponent as NSString
+        let fileManager = FileManager.default
+
+        var searchPaths = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)
+        var documentFolderPath = searchPaths[0]
+        let potentialInboxFolderPath = (documentFolderPath as NSString).appendingPathComponent("Inbox")
+
+        var pathComponent = "\(filename.deletingPathExtension)"
+        // if the media is not in the Documents folder, cache the subtitle file
+        if (mediaURLPath.contains(potentialInboxFolderPath) && !mediaURLPath.contains(documentFolderPath)) || !mediaURL.isFileURL {
+            searchPaths = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true)
+            documentFolderPath = searchPaths[0]
+            let cacheFolderPath = (documentFolderPath as NSString).appendingPathComponent(kVLCSubtitlesCacheFolderName)
+            do {
+                try fileManager.createDirectory(atPath: cacheFolderPath, withIntermediateDirectories: true)
+            } catch {
+                return
+            }
+            pathComponent = "\(kVLCSubtitlesCacheFolderName)/\(filename.deletingPathExtension)"
+        }
+
+        var destinationPath = (documentFolderPath as NSString).appendingPathComponent("\(pathComponent).\(fileURL.pathExtension)")
+        var index = 0
+
+        while fileManager.fileExists(atPath: destinationPath) {
+            index += 1
+            destinationPath = (documentFolderPath as NSString).appendingPathComponent("\(pathComponent)\(index).\(fileURL.pathExtension)")
+        }
+
+        guard fileURL.startAccessingSecurityScopedResource() else {
+            return
+        }
+
+        do {
+            try fileManager.copyItem(at: fileURL, to: URL(fileURLWithPath: destinationPath))
+        } catch {
+            fileURL.stopAccessingSecurityScopedResource()
+            return
+        }
+        fileURL.stopAccessingSecurityScopedResource()
+
+        playbackService.addSubtitlesToCurrentPlayback(from: URL(fileURLWithPath: destinationPath))
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
     }
 }
 
