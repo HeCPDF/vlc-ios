@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build unsigned IPA (iOS)
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -switch /Applications/Xcode.app
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Install CocoaPods dependencies
+        run: |
+          arch -x86_64 gem install ffi
+          arch -x86_64 pod install --repo-update
+
+      - name: Build
+        run: |
+          xcodebuild build \
+            -workspace VLC.xcworkspace \
+            -scheme "VLC-iOS-no-watch" \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Package unsigned IPA
+        run: |
+          set -e
+          PRODUCTS_DIR="DerivedData/Build/Products/Release-iphoneos"
+          PAYLOAD_DIR="Payload"
+          rm -rf "$PAYLOAD_DIR"
+          mkdir "$PAYLOAD_DIR"
+          cp -R "$PRODUCTS_DIR"/*.app "$PAYLOAD_DIR"/
+          zip -r -y VLC-iOS-unsigned.ipa "$PAYLOAD_DIR"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VLC-iOS
+          path: DerivedData/Build/Products/Release-iphoneos/*.app
+          if-no-files-found: error
+
+      - name: Upload unsigned IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VLC-iOS-unsigned-ipa
+          path: VLC-iOS-unsigned.ipa
+          if-no-files-found: error
