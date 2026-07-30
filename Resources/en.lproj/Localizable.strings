@@ -337,6 +337,14 @@
 "NO_SUB_FOUND_OSO" = "No subtitles were found for your media item \"%@\".";
 "LOAD_EXTERNAL" = "Load External";
 
+"MENU_PLAYBACK" = "Playback";
+"MENU_STOP" = "Stop";
+"MENU_NEXT" = "Next";
+"MENU_PREVIOUS" = "Previous";
+"MENU_JUMP_FORWARD" = "Jump Forward";
+"MENU_JUMP_BACKWARD" = "Jump Backward";
+"MENU_TOGGLE_PIP" = "Picture in Picture";
+
 "REPEAT_MODE" = "Repeat";
 "SHUFFLE" = "Shuffle";
 "SHUFFLE_DISABLED" = "Shuffle off";
