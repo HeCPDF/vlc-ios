@@ -24,8 +24,8 @@ jobs:
 
       - name: Install CocoaPods dependencies
         run: |
-          arch -x86_64 gem install ffi
-          arch -x86_64 pod install --repo-update
+          gem install ffi
+          pod install --repo-update
 
       - name: Build
         run: |
